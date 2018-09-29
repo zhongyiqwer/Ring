@@ -10,7 +10,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="10dp">
+        android:paddingTop="10dp"
+        android:layout_marginLeft="10dp">
 
         <Button
             android:id="@+id/btnSettingAuto"
@@ -39,6 +40,28 @@
             android:src="@mipmap/ic_loading"
             android:visibility="invisible" />
 
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="10dp">
+        <Button
+            android:id="@+id/btnCleanCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="清除计数"/>
+
+        <Button
+            android:id="@+id/btnSendMsg"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="开启短信"/>
+
+        <Button
+            android:id="@+id/btnCanCall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="开启拨号"/>
     </LinearLayout>
 
     <ListView

@@ -9,10 +9,7 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
 import android.content.Intent
 import android.graphics.BitmapFactory
-import android.os.Binder
-import android.os.Build
-import android.os.Bundle
-import android.os.IBinder
+import android.os.*
 import android.support.v7.app.NotificationCompat
 import android.telephony.SmsManager
 import com.baidu.location.BDAbstractLocationListener
@@ -26,6 +23,7 @@ import com.clj.fastble.data.BleDevice
 import com.clj.fastble.exception.BleException
 import com.clj.fastble.utils.HexUtil
 import com.example.ring.manager.KeepLiveManager
+import com.example.ring.util.Protocol
 import java.util.*
 
 
@@ -48,7 +46,9 @@ class LongConnService: Service() {
     lateinit var myLocation : String
     var latitude : Double?=0.0
     var longitude : Double?=0.0
-    var phone:String=""
+
+    private var count = 0
+    lateinit var byteArray :ByteArray
 
     lateinit var mLocationClient:LocationClient
 
@@ -94,8 +94,6 @@ class LongConnService: Service() {
 
         val preferences = getSharedPreferences("Ble", 0)
         bleDeviceMac = preferences.getString("bleDeviceMac", "")
-        phone = preferences.getString("phone","")
-        println("phone111=$phone")
         println("bleDeviceMac = $bleDeviceMac")
 
         BleManager.getInstance().init(application)
@@ -199,16 +197,14 @@ class LongConnService: Service() {
                 bleDevice, readGattCharacteristic.service.uuid.toString(),
                 readGattCharacteristic.uuid.toString(),
                 object : BleNotifyCallback() {
-                    override fun onCharacteristicChanged(notify: ByteArray?) {
+                    override fun onCharacteristicChanged(notify: ByteArray) {
                         //一次通知结束符 0d0a
                         println("notify success: " + HexUtil.formatHexString(notify,true))
-                        startSendMsg(notify!!)
+                        getNotify64(notify)
                     }
-
                     override fun onNotifyFailure(p0: BleException?) {
                         println(p0.toString())
                     }
-
                     override fun onNotifySuccess() {
                         println("通知成功")
                     }
@@ -218,12 +214,33 @@ class LongConnService: Service() {
 
     //收到手环求救信号，开始通过手机给联系人发短信打电话
     private fun startSendMsg(notify: ByteArray) {
+        println("notify64: " + HexUtil.formatHexString(notify,true))
         if (judgeMsg(notify)){
             getMyLocation()
-            println("phone = $phone")
-            if (phone.isNotEmpty()){
+            if (this.getSharedPreferences("Ble",0).getBoolean("canCall",false)){
                 callPhone()
             }
+        }
+    }
+
+    private fun getNotify64(notify: ByteArray){
+        if (notify[0] == 0xEB.toByte() && notify[1] == 0x90.toByte() &&
+                notify[2] == 0xEB.toByte() && notify[3] == 0x90.toByte()){
+            println("进入重置")
+            count=0
+            byteArray = ByteArray(64)
+        }
+        for (i in notify.indices){
+            if (count == 64){
+                break
+            }else {
+                byteArray[count] = notify[i]
+                count++
+            }
+        }
+        if (count == 64){
+            count = 0
+            startSendMsg(byteArray)
         }
     }
 
@@ -237,8 +254,8 @@ class LongConnService: Service() {
                 latitude = location.latitude
                 //经度
                 longitude = location.longitude
-                if (myLocation.isNotEmpty() && phone.isNotEmpty()){
-                    sendMsg(phone)
+                if (myLocation.isNotEmpty()){
+                    sendMsg()
                 }
             }
         })
@@ -267,22 +284,55 @@ class LongConnService: Service() {
         }).start()
     }
 
-    private fun sendMsg(phone:String) {
+    private fun sendMsg() {
+        val preferences = this.getSharedPreferences("Ble", 0)
+        val canSendMsg = preferences.getBoolean("sendMsg", false)
+        val phone = preferences.getString("phone", "")
         val smsManager = SmsManager.getDefault()
         val content = "我遇到麻烦了，请来帮助我。地点：${myLocation}，经度:${longitude}维度:$latitude"
-        println("短信内容为：$content")
+        println("canSend=$canSendMsg  短信内容为：$content")
         val list = smsManager.divideMessage(content)
-        for (text in list){
-            //smsManager.sendTextMessage(phone,null,text,null,null)
+        if (canSendMsg && phone.isNotEmpty()){
+            for (text in list){
+                smsManager.sendTextMessage(phone,null,text,null,null)
+            }
+        }else{
+            for (text in list){
+                val intent = Intent("com.example.ring.msgContent")
+                intent.putExtra("msgContent",content)
+                sendBroadcast(intent)
+            }
         }
         mLocationClient.stop()
     }
 
     private fun judgeMsg(notify: ByteArray) :Boolean{
-        //todo
-        //val data = Protocol.getReceiveCmdData(notify)
-        //println("数据为：$data")
-        return true
+        val order = Protocol.getReceiveCmdData(notify)
+        val currentTimeMillis = System.currentTimeMillis()
+        println("order=$order")
+        val preferences = this.getSharedPreferences("Ble", 0)
+        var orderCount = preferences.getInt("orderCount", 0)
+        var firstTime = preferences.getLong("firstTime",0)
+        var lastTime = preferences.getLong("last${order}Time",0)
+
+        if (currentTimeMillis-firstTime>24*60*1000){
+            orderCount=0
+            firstTime = currentTimeMillis
+        }
+        println("$lastTime ${lastTime.toInt()} $currentTimeMillis")
+        println("$orderCount ${currentTimeMillis-lastTime>=10*60*1000} ${lastTime.toInt()==0}")
+        if (orderCount<5 && (currentTimeMillis-lastTime>=10*60*1000 || lastTime.toInt()==0)){
+            ++orderCount
+            lastTime = currentTimeMillis
+            preferences.edit()
+                    .putInt("orderCount",orderCount)
+                    .putLong("firstTime",firstTime)
+                    .putLong("last${order}Time",lastTime)
+                    .commit()
+            return true
+        }
+        println("order=$order")
+        return false
     }
 
 

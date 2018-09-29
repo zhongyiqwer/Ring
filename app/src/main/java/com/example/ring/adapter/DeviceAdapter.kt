@@ -125,13 +125,14 @@ class DeviceAdapter :BaseAdapter{
         }
 
         holder.btn_connect!!.setOnClickListener {
-            if (context.getSharedPreferences("Ble",0).getString("phone","").isNotEmpty()){
-                if (mListener != null) {
-                    mListener!!.onConnect(bleDevice)
+            if (context.getSharedPreferences("Ble",0).getBoolean("canCall",false) ||
+                    context.getSharedPreferences("Ble",0).getBoolean("sendMsg",false)){
+                if (mListener != null && context.getSharedPreferences("Ble",0).getString("phone","").isEmpty()) {
+                    mListener!!.onSelectPhone()
                 }
             }else{
                 if (mListener != null) {
-                    mListener!!.onSelectPhone()
+                    mListener!!.onConnect(bleDevice)
                 }
             }
         }

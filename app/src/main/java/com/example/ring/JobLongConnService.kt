@@ -40,14 +40,15 @@ class JobLongConnService:JobService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             val jobScheduler = getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
             val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                println("走15分钟间隔$TAG")
+                println("走7.0间隔$TAG")
+                //因为7.0以上系统最小间隔为15分钟，所以用2个job互相定时开启的方式来实现
                 JobInfo.Builder(jobId, ComponentName(applicationContext, JobLongConnService::class.java))
-                        .setPeriodic(15 * 60 * 1000, 5 * 60 * 1000)
+                        .setMinimumLatency(30*1000)
                         .setRequiresCharging(true)
                         .setRequiresDeviceIdle(true)
                         .setPersisted(true)
             } else {
-                println("走2分钟间隔$TAG")
+                println("走30秒间隔$TAG")
                 JobInfo.Builder(jobId, ComponentName(applicationContext, JobLongConnService::class.java))
                         .setPeriodic(30 * 1000)
                         .setRequiresCharging(true)
@@ -65,20 +66,33 @@ class JobLongConnService:JobService() {
 
     override fun onStartJob(params: JobParameters?): Boolean {
         println("job启动$TAG")
-        if (!ServiceUtils.isServiceRunning(this, "com.example.ring.LongConnService")) {
-            val serviceIntent = Intent(this, LongConnService::class.java)
-            this.startService(serviceIntent)
-        } else {
-            if (BleManager.getInstance().allConnectedDevice.size == 0) {
-                val serviceIntent = Intent(this, LongConnService::class.java)
-                this.startService(serviceIntent)
-            }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N){
+            println("job 7.0 启动$TAG")
+            startLonConnJob()
+            scheduleRefresh()
+            jobFinished(params,false)
+            return true
+        }else{
+            startLonConnJob()
         }
         return false
     }
 
-    override fun onStopJob(params: JobParameters?): Boolean {
-        println("job停止$TAG")
+    private fun scheduleRefresh() {
+        val jobScheduler = getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+        val builder = JobInfo.Builder(jobId, ComponentName(applicationContext, JobLongConnService::class.java))
+                .setMinimumLatency(30 * 1000)
+                .setRequiresCharging(true)
+                .setRequiresDeviceIdle(true)
+                .setPersisted(true)
+        if (jobScheduler.schedule(builder.build()) == JobScheduler.RESULT_SUCCESS) {
+            println("工作7.0成功$TAG")
+        } else {
+            println("工作7.0失败$TAG")
+        }
+    }
+
+    private fun startLonConnJob() {
         if (!ServiceUtils.isServiceRunning(this, "com.example.ring.LongConnService")) {
             val serviceIntent = Intent(this, LongConnService::class.java)
             this.startService(serviceIntent)
@@ -88,6 +102,11 @@ class JobLongConnService:JobService() {
                 this.startService(serviceIntent)
             }
         }
+    }
+
+    override fun onStopJob(params: JobParameters?): Boolean {
+        println("job停止$TAG")
+        startLonConnJob()
         return false
     }
 

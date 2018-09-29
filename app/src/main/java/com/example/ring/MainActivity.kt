@@ -21,6 +21,7 @@ import com.clj.fastble.callback.BleScanCallback
 import com.clj.fastble.data.BleDevice
 import com.example.massor.adapter.DeviceAdapter
 import com.example.ring.util.SettingUtils
+import com.example.ring.util.Utils
 import kotlinx.android.synthetic.main.activity_main.*
 
 
@@ -65,10 +66,15 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
     }
 
     private fun initView() {
+        if (!Utils.isNetworkAvailable(this)){
+            Toast.makeText(this@MainActivity,"请开启网络",Toast.LENGTH_SHORT).show()
+        }
+
         broadcast = MyConnectStateBroadcast()
         val intentFilter = IntentFilter()
         intentFilter.addAction("com.example.ring.connectSuccess")
         intentFilter.addAction("com.example.ring.disConnected")
+        intentFilter.addAction("com.example.ring.msgContent")
         registerReceiver(broadcast,intentFilter)
 
         btn_scan.setOnClickListener(this)
@@ -100,6 +106,24 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
 
         btnSettingPhone.setOnClickListener (this)
         btnSettingAuto.setOnClickListener(this)
+        btnCanCall.setOnClickListener(this)
+        btnSendMsg.setOnClickListener(this)
+        btnCleanCount.setOnClickListener(this)
+
+        val preferences = getSharedPreferences("Ble", 0)
+        val canCall = preferences.getBoolean("canCall", false)
+        val sendMsg = preferences.getBoolean("sendMsg", false)
+        if (!canCall){
+            btnCanCall.text = "开启拨号"
+        }else{
+            btnCanCall.text = "关闭拨号"
+        }
+
+        if (!sendMsg){
+            btnSendMsg.text = "开启短信"
+        }else{
+            btnSendMsg.text = "关闭短信"
+        }
     }
 
 
@@ -126,6 +150,10 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
         @SuppressLint("MissingPermission")
         override fun onReceive(context: Context?, intent: Intent?) {
             when(intent!!.action){
+                "com.example.ring.msgContent"->{
+                    val msgContent = intent.getStringExtra("msgContent")
+                    Toast.makeText(this@MainActivity,"$msgContent",Toast.LENGTH_LONG).show()
+                }
                 "com.example.ring.connectSuccess" ->{
                     println("com.example.ring.connectSuccess")
                     val bundle = intent.getBundleExtra("bundle")
@@ -212,6 +240,51 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
             }
             btnSettingAuto->{
                 SettingUtils.enterWhiteListSetting(this)
+            }
+            btnCanCall->{
+                val preferences = getSharedPreferences("Ble", 0)
+                val phone = preferences.getString("phone", "")
+                if (btnCanCall.text.toString()=="关闭拨号"){
+                    preferences.edit().putBoolean("canCall", false).commit()
+                    btnCanCall.text = "开启拨号"
+                }else{
+                    if (phone.isEmpty()){
+                        Toast.makeText(this,"请输入手机号",Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                    preferences.edit().putBoolean("canCall", true).commit()
+                    btnCanCall.text = "关闭拨号"
+                }
+            }
+            btnSendMsg->{
+                val preferences = getSharedPreferences("Ble", 0)
+                val phone = preferences.getString("phone", "")
+                if (btnSendMsg.text.toString()=="关闭短信"){
+                    preferences.edit().putBoolean("sendMsg", false).commit()
+                    btnSendMsg.text = "开启短信"
+                }else{
+                    if (phone.isEmpty()){
+                        Toast.makeText(this,"请输入手机号",Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                    preferences.edit().putBoolean("sendMsg", true).commit()
+                    btnSendMsg.text = "关闭短信"
+                }
+            }
+            btnCleanCount->{
+                val preferences = getSharedPreferences("Ble", 0)
+                val edit = preferences.edit()
+                val mutableMap = preferences.all
+                for (i in mutableMap.keys){
+                    if (i.startsWith("last") && i.endsWith("Time")){
+                        edit.putLong(i,0)
+                    }else if ("firstTime" == i) {
+                        edit.putLong(i,0)
+                    }else if ("orderCount" == i){
+                        edit.putInt(i,0)
+                    }
+                }
+                edit.commit()
             }
         }
     }

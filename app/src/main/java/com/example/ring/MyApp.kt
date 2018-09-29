@@ -18,6 +18,7 @@ class MyApp:Application() {
         //百度地图
         println("app初始化")
         SDKInitializer.initialize(this)
+        //5.0一下手机
         if (Build.VERSION.SDK_INT< Build.VERSION_CODES.LOLLIPOP) {
             startLongConn()
         }

@@ -22,10 +22,12 @@ object Protocol {
     const val CMD_SET_24_PHASE :Int = 12
     const val CMD_GET_24_PHASE :Int = 13
 
+    const val MSG_WARN:Int = 14
+
     private val CMD_Order : ByteArray = byteArrayOf(0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E)
     private val CMD_Order_Receive : ByteArray = byteArrayOf(0x81.toByte(),0x82.toByte(),0x83.toByte(),0x84.toByte(),
             0x85.toByte(),0x86.toByte(),0x87.toByte(),0x88.toByte(),0x89.toByte(),0x8A.toByte(),0x8B.toByte(),
-            0x8C.toByte(),0x8D.toByte(),0x8E.toByte())
+            0x8C.toByte(),0x8D.toByte(),0x8E.toByte(),0xA0.toByte())
 
     private val CMD_Order_Receive_Fail : ByteArray = byteArrayOf(0xC1.toByte(),0xC2.toByte(),0xC3.toByte(),0xC4.toByte(),
             0xC5.toByte(),0xC6.toByte(),0xC7.toByte(),0xC8.toByte(),0xC9.toByte(),0xCA.toByte(),0xCB.toByte(),
@@ -195,32 +197,33 @@ object Protocol {
      *对接收到的数据进行解析
      */
     fun getReceiveCmdData(receiveByteArr:ByteArray):String{
-        var content: String =""
+        var content=""
         if (!checkReceive(receiveByteArr)){
             //数据校验没有通过
-            content = "数据校验失败"
             println("数据校验没有通过")
         }else{
-            content = getCmdOrderAndContent(receiveByteArr)
+            val order = getCmdOrder(receiveByteArr)
+            content = getContent(order,receiveByteArr)
         }
-        println("content=$content")
         return content
     }
 
-    private fun getCmdOrderAndContent(receiveByteArr: ByteArray) :String{
+    private fun getCmdOrder(receiveByteArr: ByteArray) :Int {
         val cmd = receiveByteArr[10]
-        var order :Int = 14
-        var content = StringBuilder()
-        //成功
-        for (i in CMD_Order_Receive.indices){
-            if (cmd == CMD_Order_Receive[i]){
+        var order = 1000
+        for (i in CMD_Order_Receive.indices) {
+            if (cmd == CMD_Order_Receive[i]) {
                 order = i
-            }else if (cmd == CMD_Order_Receive_Fail[i]){
+            } else if (cmd == CMD_Order_Receive_Fail[i]) {
                 println("操作 $i 执行失败！")
             }
         }
-        println("order=$order")
+        return order
+    }
 
+
+    fun getContent(order: Int,receiveByteArr: ByteArray):String{
+        var content = StringBuilder()
         when(order){
             CMD_SET_FRAME ->{
                 val frameIndex = receiveByteArr[11]
@@ -288,10 +291,17 @@ object Protocol {
                     content.append("2相")
                 }
             }
+            //Ring的警报功能
+            MSG_WARN->{
+                val warnIndex = receiveByteArr[11].toInt() and 0xFF
+                content.append(warnIndex)
+            }
 
         }
         return content.toString()
     }
+
+
 
     private fun phaseLoopParam(receiveByteArr: ByteArray):String {
         var index = 12

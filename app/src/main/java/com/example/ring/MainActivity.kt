@@ -169,25 +169,26 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
                     val isAcc = intent.getBooleanExtra("isAcc", false)
                     if (isAcc){
                         val intArrayExtra = intent.getIntArrayExtra("intArray")
-                        if (intArrayExtra[0]>0){
+                        //Y方向
+                        if (intArrayExtra[1]>=10000){
                             imTop.background=getDrawable(R.color.green)
                             imBottom.background=getDrawable(R.color.normoal)
-                        }else{
+                        }else if (intArrayExtra[1]<=-10000){
                             imTop.background=getDrawable(R.color.normoal)
                             imBottom.background=getDrawable(R.color.green)
                         }
-
-                        if (intArrayExtra[1]>0){
+                        //X方向
+                        if (intArrayExtra[0]>=10000){
                             imLeft.background=getDrawable(R.color.green)
                             imRight.background=getDrawable(R.color.normoal)
-                        }else{
+                        }else if (intArrayExtra[0]<=-10000){
                             imLeft.background=getDrawable(R.color.normoal)
                             imRight.background=getDrawable(R.color.green)
                         }
-
-                        if (intArrayExtra[2]>0){
+                        //Z方向
+                        if (intArrayExtra[2]>=10000){
                             imCentener.background=getDrawable(R.color.green)
-                        }else{
+                        }else if (intArrayExtra[2]<=-10000){
                             imCentener.background=getDrawable(R.color.yellow)
                         }
 

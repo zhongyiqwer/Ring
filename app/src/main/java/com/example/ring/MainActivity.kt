@@ -1,11 +1,17 @@
 package com.example.ring
 
 import android.annotation.SuppressLint
+import android.app.job.JobInfo
+import android.app.job.JobScheduler
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.content.*
-import android.net.Uri
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.support.annotation.RequiresApi
+import android.support.v4.content.LocalBroadcastManager
 import android.support.v7.app.AlertDialog
 import android.support.v7.app.AppCompatActivity
 import android.text.InputType
@@ -20,13 +26,15 @@ import com.clj.fastble.BleManager
 import com.clj.fastble.callback.BleScanCallback
 import com.clj.fastble.data.BleDevice
 import com.example.massor.adapter.DeviceAdapter
+import com.example.ring.util.ServiceUtils
 import com.example.ring.util.SettingUtils
 import com.example.ring.util.Utils
+import kotlinx.android.synthetic.main.acc_con_temp_layout.*
 import kotlinx.android.synthetic.main.activity_main.*
 
 
 class MainActivity : AppCompatActivity() ,View.OnClickListener{
-
+    private val TAG = "MainActivity"
     lateinit var conn :ServiceConnection
     lateinit var adapter: DeviceAdapter
     lateinit var operatingAnim: Animation
@@ -61,8 +69,10 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
     }*/
 
     private fun startMyService(){
-        val intent = Intent(this, LongConnService::class.java)
-        startService(intent)
+        if (!ServiceUtils.isServiceRunning(this,"com.example.ring.LongConnService")){
+            val serviceIntent = Intent(this, LongConnService::class.java)
+            startService(serviceIntent)
+        }
     }
 
     private fun initView() {
@@ -75,7 +85,7 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
         intentFilter.addAction("com.example.ring.connectSuccess")
         intentFilter.addAction("com.example.ring.disConnected")
         intentFilter.addAction("com.example.ring.msgContent")
-        registerReceiver(broadcast,intentFilter)
+        LocalBroadcastManager.getInstance(this).registerReceiver(broadcast,intentFilter)
 
         btn_scan.setOnClickListener(this)
         adapter = DeviceAdapter(this)
@@ -88,16 +98,20 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
                 Toast.makeText(this@MainActivity,"请先输出紧急联系人电话号码",Toast.LENGTH_SHORT).show()
             }
 
-            override fun onConnect(bleDevice: BleDevice?) {
-                if (!BleManager.getInstance().isConnected(bleDevice) && bleDevice!!.mac.isNotEmpty()) {
+            override fun onConnect(bleDevice: BleDevice) {
+                if (!BleManager.getInstance().isConnected(bleDevice) && bleDevice.mac.isNotEmpty()) {
                     BleManager.getInstance().cancelScan()
                     val edit = getSharedPreferences("Ble", 0).edit()
                     edit.putString("bleDeviceMac",bleDevice.mac)
                     edit.commit()
+                    /*if (bleDevice.device.bondState == BluetoothDevice.BOND_NONE){
+                        val bond = bleDevice.device.createBond()
+                        println("bond = $bond")
+                    }*/
                     startMyService()
                 }
             }
-            override fun onDisConnect(bleDevice: BleDevice?) {
+            override fun onDisConnect(bleDevice: BleDevice) {
                 if (BleManager.getInstance().isConnected(bleDevice)) {
                     BleManager.getInstance().disconnect(bleDevice)
                 }
@@ -147,12 +161,40 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
 
     inner class MyConnectStateBroadcast : BroadcastReceiver(){
 
+        @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
         @SuppressLint("MissingPermission")
         override fun onReceive(context: Context?, intent: Intent?) {
             when(intent!!.action){
                 "com.example.ring.msgContent"->{
-                    val msgContent = intent.getStringExtra("msgContent")
-                    Toast.makeText(this@MainActivity,"$msgContent",Toast.LENGTH_LONG).show()
+                    val isAcc = intent.getBooleanExtra("isAcc", false)
+                    if (isAcc){
+                        val intArrayExtra = intent.getIntArrayExtra("intArray")
+                        if (intArrayExtra[0]>0){
+                            imTop.background=getDrawable(R.color.green)
+                            imBottom.background=getDrawable(R.color.normoal)
+                        }else{
+                            imTop.background=getDrawable(R.color.normoal)
+                            imBottom.background=getDrawable(R.color.green)
+                        }
+
+                        if (intArrayExtra[1]>0){
+                            imLeft.background=getDrawable(R.color.green)
+                            imRight.background=getDrawable(R.color.normoal)
+                        }else{
+                            imLeft.background=getDrawable(R.color.normoal)
+                            imRight.background=getDrawable(R.color.green)
+                        }
+
+                        if (intArrayExtra[2]>0){
+                            imCentener.background=getDrawable(R.color.green)
+                        }else{
+                            imCentener.background=getDrawable(R.color.yellow)
+                        }
+
+                    }else{
+                        val msgContent = intent.getStringExtra("msgContent")
+                        Toast.makeText(this@MainActivity,"$msgContent",Toast.LENGTH_LONG).show()
+                    }
                 }
                 "com.example.ring.connectSuccess" ->{
                     println("com.example.ring.connectSuccess")
@@ -167,6 +209,11 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
                     val bleDevice = bundle["bleDevice"] as BleDevice
                     adapter.removeDevice(bleDevice)
                     adapter.notifyDataSetChanged()
+                    imCentener.background=getDrawable(R.color.normoal)
+                    imTop.background=getDrawable(R.color.normoal)
+                    imBottom.background=getDrawable(R.color.normoal)
+                    imLeft.background=getDrawable(R.color.normoal)
+                    imRight.background=getDrawable(R.color.normoal)
                 }
                 "com.example.ring.connectFail" ->{
                     println("com.example.ring.connectFail")
@@ -301,6 +348,6 @@ class MainActivity : AppCompatActivity() ,View.OnClickListener{
     override fun onDestroy() {
         super.onDestroy()
         //unbindService(conn)
-        unregisterReceiver(broadcast)
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcast)
     }
 }

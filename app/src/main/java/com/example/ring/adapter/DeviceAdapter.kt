@@ -125,21 +125,26 @@ class DeviceAdapter :BaseAdapter{
         }
 
         holder.btn_connect!!.setOnClickListener {
-            if (context.getSharedPreferences("Ble",0).getBoolean("canCall",false) ||
-                    context.getSharedPreferences("Ble",0).getBoolean("sendMsg",false)){
-                if (mListener != null && context.getSharedPreferences("Ble",0).getString("phone","").isEmpty()) {
+            val preferences = context.getSharedPreferences("Ble", 0)
+            if (preferences.getBoolean("canCall",false) ||
+                    preferences.getBoolean("sendMsg",false)){
+                if (mListener != null && preferences.getString("phone","").isEmpty()) {
                     mListener!!.onSelectPhone()
+                }else{
+                    if (mListener != null) {
+                        mListener!!.onConnect(bleDevice!!)
+                    }
                 }
             }else{
                 if (mListener != null) {
-                    mListener!!.onConnect(bleDevice)
+                    mListener!!.onConnect(bleDevice!!)
                 }
             }
         }
 
         holder.btn_disconnect!!.setOnClickListener {
             if (mListener != null) {
-                mListener!!.onDisConnect(bleDevice)
+                mListener!!.onDisConnect(bleDevice!!)
             }
         }
         return view
@@ -157,9 +162,9 @@ class DeviceAdapter :BaseAdapter{
     }
 
     interface OnDeviceClickListener {
-        fun onConnect(bleDevice: BleDevice?)
+        fun onConnect(bleDevice: BleDevice)
 
-        fun onDisConnect(bleDevice: BleDevice?)
+        fun onDisConnect(bleDevice: BleDevice)
 
         fun onSelectPhone()
     }

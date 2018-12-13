@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Bundle
+import android.support.v4.content.LocalBroadcastManager
 import android.support.v7.app.AppCompatActivity
 import android.view.Gravity
 import com.example.ring.manager.KeepLiveManager
@@ -35,12 +36,12 @@ class KeepLiveActivity:AppCompatActivity() {
         broadcast = MyBroadcast()
         val intentFilter = IntentFilter()
         intentFilter.addAction("com.example.ring.callPhone")
-        registerReceiver(broadcast,intentFilter)
+        LocalBroadcastManager.getInstance(this).registerReceiver(broadcast,intentFilter)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(broadcast)
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcast)
     }
 
     inner class MyBroadcast:BroadcastReceiver(){

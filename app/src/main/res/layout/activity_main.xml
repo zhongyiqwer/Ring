@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:animateLayoutChanges="true"
     android:orientation="vertical">
 
@@ -67,13 +67,22 @@
     <ListView
         android:id="@+id/list_device"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="200dp"
         android:layout_marginTop="10dp"
         android:divider="@android:color/darker_gray"
         android:dividerHeight="0.5dp"
         android:paddingEnd="5dp"
         android:paddingStart="5dp"
-        android:scrollbars="none" />
+        android:scrollbars="none"
+        android:visibility="visible" />
+
+    <LinearLayout
+        android:id="@+id/llAcc"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="visible">
+        <include layout="@layout/acc_con_temp_layout" />
+    </LinearLayout>
 
 
 </LinearLayout>

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:id="@+id/imCentener"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:text="c"
+        android:textSize="18sp"
+        android:padding="5dp"
+        android:layout_centerInParent="true"
+        android:background="@color/normoal" />
+
+    <TextView
+        android:id="@+id/imLeft"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:text="b"
+        android:textSize="18sp"
+        android:padding="5dp"
+        android:layout_marginRight="20dp"
+        android:background="@color/normoal"
+        android:layout_centerVertical="true"
+        android:layout_toLeftOf="@id/imCentener"/>
+
+    <TextView
+        android:id="@+id/imRight"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_marginLeft="20dp"
+        android:text="b"
+        android:textSize="18sp"
+        android:padding="5dp"
+        android:layout_centerInParent="true"
+        android:background="@color/normoal"
+        android:layout_toRightOf="@id/imCentener" />
+
+    <TextView
+        android:id="@+id/imTop"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_marginBottom="20dp"
+        android:text="a"
+        android:textSize="18sp"
+        android:padding="5dp"
+        android:layout_centerInParent="true"
+        android:background="@color/normoal"
+        android:layout_above="@id/imCentener"/>
+
+    <TextView
+        android:id="@+id/imBottom"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_marginTop="20dp"
+        android:layout_centerInParent="true"
+        android:text="a"
+        android:textSize="18sp"
+        android:padding="5dp"
+        android:background="@color/normoal"
+        android:layout_below="@id/imCentener" />
+</RelativeLayout>

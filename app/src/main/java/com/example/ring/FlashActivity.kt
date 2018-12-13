@@ -53,7 +53,7 @@ class FlashActivity : AppCompatActivity(){
                 for (grant in grantResults){
                     if (grant != PackageManager.PERMISSION_GRANTED){
                         Toast.makeText(this,"拒绝权限无法使用部分功能",Toast.LENGTH_SHORT).show()
-                        return
+                        finish()
                     }
                 }
                 startActivity(intent)

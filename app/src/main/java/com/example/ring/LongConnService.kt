@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothGattService
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.*
+import android.support.v4.content.LocalBroadcastManager
 import android.support.v7.app.NotificationCompat
 import android.telephony.SmsManager
 import com.baidu.location.BDAbstractLocationListener
@@ -23,7 +24,10 @@ import com.clj.fastble.data.BleDevice
 import com.clj.fastble.exception.BleException
 import com.clj.fastble.utils.HexUtil
 import com.example.ring.manager.KeepLiveManager
+import com.example.ring.util.LogUtil
 import com.example.ring.util.Protocol
+import com.example.ring.util.ServiceUtils
+import com.example.ring.util.StringUtil
 import java.util.*
 
 
@@ -48,9 +52,11 @@ class LongConnService: Service() {
     var longitude : Double?=0.0
 
     private var count = 0
-    lateinit var byteArray :ByteArray
+    private var byteArray =ByteArray(64)
 
-    lateinit var mLocationClient:LocationClient
+    private var mHandlerThread = HandlerThread("longService")
+
+    private var mLocationClient = LocationClient(this)
 
     inner class LocalBinder :Binder(){
         fun getService():LongConnService {
@@ -74,10 +80,28 @@ class LongConnService: Service() {
         println("$TAG onCreate")
         BleManager.getInstance()
                 .enableLog(true)
-                .setReConnectCount(1,5000)
+                .setReConnectCount(10,30*1000)
                 .setSplitWriteNum(64)
                 .setConnectOverTime(10000)
                 .setOperateTimeout(5000)
+
+        mHandlerThread.start()
+        val handler = object :Handler(mHandlerThread.looper){
+            override fun handleMessage(msg: Message?) {
+                super.handleMessage(msg)
+                if (msg!!.what==1){
+                    println("handleMessage")
+                    if (Build.VERSION.SDK_INT>= Build.VERSION_CODES.LOLLIPOP){
+                        if (!ServiceUtils.isServiceRunning(this@LongConnService,"com.example.ring.JobLongConnService")){
+                            val serviceIntent = Intent(this@LongConnService, JobLongConnService::class.java)
+                            this@LongConnService.startService(serviceIntent)
+                        }
+                        sendEmptyMessageDelayed(1,30*1000)
+                    }
+                }
+            }
+        }
+        handler.sendEmptyMessageDelayed(1,30*1000)
     }
 
     //每次startService的时候调用
@@ -95,6 +119,7 @@ class LongConnService: Service() {
         val preferences = getSharedPreferences("Ble", 0)
         bleDeviceMac = preferences.getString("bleDeviceMac", "")
         println("bleDeviceMac = $bleDeviceMac")
+        LogUtil.d(TAG,"bleDeviceMac = $bleDeviceMac")
 
         BleManager.getInstance().init(application)
 
@@ -106,6 +131,8 @@ class LongConnService: Service() {
             }
         }
 
+        LogUtil.d(TAG,"isBlueEnable = ${BleManager.getInstance().isBlueEnable}")
+
         if (bleDeviceMac.isNotEmpty()){
             connectBle(bleDeviceMac)
         }
@@ -116,6 +143,7 @@ class LongConnService: Service() {
         println("bleMac为空吗：$bleDeviceMac")
         if (bleDeviceMac.isNotEmpty() && !BleManager.getInstance().isConnected(bleDeviceMac)){
 
+            LogUtil.d(TAG,"bleConnect")
             BleManager.getInstance().connect(bleDeviceMac,object :BleGattCallback(){
                 override fun onStartConnect() {
                     println("开始连接")
@@ -128,7 +156,7 @@ class LongConnService: Service() {
                     val bundle = Bundle()
                     bundle.putParcelable("bleDevice",p1)
                     intent.putExtra("bundle",bundle)
-                    sendBroadcast(intent)
+                    LocalBroadcastManager.getInstance(this@LongConnService).sendBroadcast(intent)
                 }
                 override fun onConnectSuccess(p0: BleDevice, p1: BluetoothGatt?, p2: Int) {
                     println("连接成功")
@@ -138,7 +166,7 @@ class LongConnService: Service() {
                     val bundle = Bundle()
                     bundle.putParcelable("bleDevice",p0)
                     intent.putExtra("bundle",bundle)
-                    sendBroadcast(intent)
+                    LocalBroadcastManager.getInstance(this@LongConnService).sendBroadcast(intent)
                     bleDevice = p0
                     connGatt()
                 }
@@ -150,7 +178,7 @@ class LongConnService: Service() {
                     val bundle = Bundle()
                     bundle.putParcelable("bleDevice",p0)
                     intent.putExtra("bundle",bundle)
-                    sendBroadcast(intent)
+                    LocalBroadcastManager.getInstance(this@LongConnService).sendBroadcast(intent)
                 }
             })
         }
@@ -171,12 +199,12 @@ class LongConnService: Service() {
                 characteristicList.add(characteristic)
             }
             for (gattCharacteristic in characteristicList) {
-                if (gattCharacteristic.uuid.toString().equals(writeUUID)) {
+                if (gattCharacteristic.uuid.toString() == writeUUID) {
                     writeGattCharacteristic = gattCharacteristic
                     println("write=" + writeGattCharacteristic.uuid.toString())
                     writeFlag = true
                 }
-                if (gattCharacteristic.uuid.toString().equals(readUUID)) {
+                if (gattCharacteristic.uuid.toString() == readUUID) {
                     readGattCharacteristic = gattCharacteristic
                     println("read=" + readGattCharacteristic.uuid.toString())
                     readFlag = true
@@ -201,6 +229,7 @@ class LongConnService: Service() {
                         //一次通知结束符 0d0a
                         println("notify success: " + HexUtil.formatHexString(notify,true))
                         getNotify64(notify)
+
                     }
                     override fun onNotifyFailure(p0: BleException?) {
                         println(p0.toString())
@@ -215,37 +244,73 @@ class LongConnService: Service() {
     //收到手环求救信号，开始通过手机给联系人发短信打电话
     private fun startSendMsg(notify: ByteArray) {
         println("notify64: " + HexUtil.formatHexString(notify,true))
+        LogUtil.d(TAG,"notify sucess")
         if (judgeMsg(notify)){
             getMyLocation()
             if (this.getSharedPreferences("Ble",0).getBoolean("canCall",false)){
+                LogUtil.d(TAG,"开始callPhone")
                 callPhone()
             }
         }
     }
 
     private fun getNotify64(notify: ByteArray){
-        if (notify[0] == 0xEB.toByte() && notify[1] == 0x90.toByte() &&
-                notify[2] == 0xEB.toByte() && notify[3] == 0x90.toByte()){
-            println("进入重置")
+        if(notify[0] == 0xEB.toByte() && notify[1] == 0x90.toByte() && notify.size==16){
+            println("进入16字节数据")
             count=0
-            byteArray = ByteArray(64)
-        }
-        for (i in notify.indices){
-            if (count == 64){
-                break
-            }else {
-                byteArray[count] = notify[i]
-                count++
+            val array = ByteArray(2)
+            array[0] = notify[count++]
+            array[1] = notify[count++]
+            val accA = StringUtil.byteArr22Int(array)
+            array[0] = notify[count++]
+            array[1] = notify[count++]
+            val accB = StringUtil.byteArr22Int(array)
+            array[0] = notify[count++]
+            array[1] = notify[count++]
+            val accC = StringUtil.byteArr22Int(array)
+            array[0] = notify[count++]
+            array[1] = notify[count++]
+            val temp = StringUtil.byteArr22Int(array)
+            array[0] = notify[count++]
+            array[1] = notify[count++]
+            val conA = StringUtil.byteArr22Int(array)
+            array[0] = notify[count++]
+            array[1] = notify[count++]
+            val conB = StringUtil.byteArr22Int(array)
+            array[0] = notify[count++]
+            array[1] = notify[count++]
+            val conC = StringUtil.byteArr22Int(array)
+            val intArray = intArrayOf(accA,accB,accC,temp,conA,conB,conC)
+            println("accA= $accA accB=$accB accC=$accC temp=$temp conA=$conA conB=$conB conC=$conC")
+            val intent = Intent("com.example.ring.msgContent")
+            intent.putExtra("intArray",intArray)
+            intent.putExtra("isAcc",true)
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+        }else {
+            if (notify[0] == 0xEB.toByte() && notify[1] == 0x90.toByte() &&
+                    notify[2] == 0xEB.toByte() && notify[3] == 0x90.toByte()){
+                println("进入重置")
+                count=0
             }
-        }
-        if (count == 64){
-            count = 0
-            startSendMsg(byteArray)
+            if (byteArray.isNotEmpty()){
+                for (i in notify.indices){
+                    if (count == 64){
+                        break
+                    }else {
+                        byteArray[count] = notify[i]
+                        count++
+                    }
+                }
+                if (count == 64){
+                    count = 0
+                    startSendMsg(byteArray)
+                }
+            }
         }
     }
 
     private fun getMyLocation() {
-        mLocationClient = LocationClient(this);     //声明LocationClient类
+        //mLocationClient = LocationClient(this)     //声明LocationClient类
         mLocationClient.registerLocationListener(object : BDAbstractLocationListener(){
             override fun onReceiveLocation(location: BDLocation) {
                 //详细地址
@@ -278,7 +343,7 @@ class LongConnService: Service() {
             val intent = Intent()
             intent.action = "com.example.ring.callPhone"
             intent.flags = Intent.FLAG_INCLUDE_STOPPED_PACKAGES
-            sendBroadcast(intent)
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
             Thread.sleep(1000)
             KeepLiveManager.finishKeepLiveActivity()
         }).start()
@@ -290,6 +355,7 @@ class LongConnService: Service() {
         val phone = preferences.getString("phone", "")
         val smsManager = SmsManager.getDefault()
         val content = "我遇到麻烦了，请来帮助我。地点：${myLocation}，经度:${longitude}维度:$latitude"
+        LogUtil.d(TAG,content)
         println("canSend=$canSendMsg  短信内容为：$content")
         val list = smsManager.divideMessage(content)
         if (canSendMsg && phone.isNotEmpty()){
@@ -300,7 +366,7 @@ class LongConnService: Service() {
             for (text in list){
                 val intent = Intent("com.example.ring.msgContent")
                 intent.putExtra("msgContent",content)
-                sendBroadcast(intent)
+                LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
             }
         }
         mLocationClient.stop()
@@ -340,13 +406,14 @@ class LongConnService: Service() {
     override fun onDestroy() {
         println("$TAG onDestroy")
         stopForeground(true)
-        val intent = Intent("com.example.ring.destroy")
+        val intent = Intent("com.example.ring.destroy.LonConnService")
         intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
         sendBroadcast(intent)
         BleManager.getInstance().clearCharacterCallback(bleDevice)
         BleManager.getInstance().disconnectAllDevice()
         BleManager.getInstance().destroy()
         mLocationClient.stop()
+        mHandlerThread.quit()
         super.onDestroy()
     }
 
